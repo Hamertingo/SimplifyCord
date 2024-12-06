@@ -10,12 +10,12 @@
     "test": "tsx watch test/index.ts"
   },
   "bugs": {
-    "url" : "https://github.com/KevenCampos/FastDiscordJS/issues",
-    "email": "kevencampos1@hotmail.com"
+    "url" : "https://github.com/Hamertingo/SimplifyCord/issues",
+    "email": "hamertidev@gmail.com"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/KevenCampos/FastDiscordJS"
+    "url": "https://github.com/Hamertingo/SimplifyCord"
   },
   "author": "Hamerti",
   "license": "ISC",
