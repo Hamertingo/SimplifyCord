@@ -9,9 +9,9 @@ import {
     MentionableSelectMenuInteraction, 
     MessageComponentInteraction, 
     CacheType, 
-    ModalMessageModalSubmitInteraction 
+    ModalMessageModalSubmitInteraction,
+    Client 
 } from "discord.js";
-import { Client } from ".";
 
 export enum InteractionType {
     Button="Button",

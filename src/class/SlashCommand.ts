@@ -1,5 +1,4 @@
-import { ApplicationCommandOption, ApplicationCommandType, CommandInteraction, InteractionResponse } from "discord.js";
-import { Client } from ".";
+import { ApplicationCommandOption, ApplicationCommandType, CommandInteraction, InteractionResponse, Client } from "discord.js";
 import chalk from 'chalk';
 
 export type CommandErrorHandler = (error: unknown, interaction: CommandInteraction) => void;

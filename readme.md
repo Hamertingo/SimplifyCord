@@ -28,21 +28,25 @@ git clone [seu-repositorio]
 npm install
 ```
 
-3. Configure seu bot no arquivo `src/test/index.ts`:
+3. Configure seu bot no arquivo `src/index.ts`:
+
 ```typescript
 new bootstrapApp({ 
-    // Pasta onde estão seus comandos e eventos
-    autoImport: ["src/test/commands", "src/test/events"],
+    // Importação automática de arquivos
+    autoImport: ["src/commands", "src/events"],
     
-    // Token do seu bot
-    token: "SEU_TOKEN_AQUI",
+    // Token do bot
+    token: "TOKEN_AQUI",
     
     // Ativa logs detalhados
     loadLogs: true,
     
-    // Opcional: Registra comandos apenas em servidores específicos
+    // Configuração de comandos
     commands: {
-        guilds: ["ID_DO_SERVIDOR"]
+        // Registra comandos apenas em servidores específicos
+        guilds: ["ID_DO_SERVIDOR_1", "ID_DO_SERVIDOR_2", "ID_DO_SERVIDOR_3"],
+        
+        // Ou registra globalmente (não especifique guilds)
     }
 })
 ```
@@ -54,12 +58,12 @@ new bootstrapApp({
 Crie comandos slash com facilidade:
 
 ```typescript
-import { SlashCommand } from "class";
+import { SlashCommand } from "simplifycord"; 
 import { ApplicationCommandType } from "discord.js";
 
 new SlashCommand({
-    name: "test",
-    description: "Comando de teste",
+    name: "ping",
+    description: "Pong",
     type: ApplicationCommandType.ChatInput,
     run: async (_client, interaction) => {
         await interaction.reply({
@@ -74,7 +78,7 @@ new SlashCommand({
 
 #### Criando Botões
 ```typescript
-import { CreateRow } from "components";
+import { CreateRow } from "simplifycord";
 import { ButtonBuilder } from "discord.js";
 
 const buttons = CreateRow([
@@ -93,7 +97,7 @@ const buttons = CreateRow([
 
 #### Criando Embeds
 ```typescript
-import { CreateEmbed } from "components";
+import { CreateEmbed } from "simplifycord";
 
 const embed = CreateEmbed({
     title: "Título do Embed",
@@ -106,7 +110,7 @@ const embed = CreateEmbed({
 
 #### Criando Modais
 ```typescript
-import { CreateModal } from "components";
+import { CreateModal } from "simplifycord";
 import { TextInputStyle } from "discord.js";
 
 const modal = CreateModal({
@@ -126,8 +130,8 @@ const modal = CreateModal({
 
 #### Manipulador de Interações Básico
 ```typescript
-import { InteractionHandler } from "class";
-import { InteractionType } from "class/InteractionHandler";
+import { InteractionHandler } from "simplifycord";
+import { InteractionType } from "simplifycord";
 
 new InteractionHandler({
     customId: "test-button",
@@ -167,36 +171,13 @@ new InteractionHandler({
 Crie listeners para eventos do Discord:
 
 ```typescript
-import { Event } from "class";
+import { Event } from "simplifycord";
 
 new Event({
-    name: "ready",
+    name: "Ready Event",
+    event: "ready",
     async run() {
         console.log(`Bot online como ${client.user.tag}!`);
-    }
-})
-```
-
-### 🔄 Configurações Avançadas do bootstrapApp
-
-```typescript
-new bootstrapApp({ 
-    // Importação automática de arquivos
-    autoImport: ["src/commands", "src/events"],
-    
-    // Token do bot
-    token: "TOKEN_AQUI",
-    
-    // Ativa logs detalhados
-    loadLogs: true,
-    
-    // Configuração de comandos
-    commands: {
-        // Registra comandos apenas em servidores específicos
-        guilds: ["ID_DO_SERVIDOR_1", "ID_DO_SERVIDOR_2"],
-        
-        // Ou registra globalmente (não especifique guilds)
-        // global: true
     }
 })
 ```

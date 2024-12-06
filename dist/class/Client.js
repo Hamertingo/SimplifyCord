@@ -26,6 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.bootstrapApp = void 0;
 const discord_js_1 = __importStar(require("discord.js"));
 const InteractionHandler_1 = require("./InteractionHandler");
 const SlashCommand_1 = __importStar(require("./SlashCommand"));
@@ -230,3 +231,4 @@ class bootstrapApp extends discord_js_1.Client {
     }
 }
 exports.default = bootstrapApp;
+exports.bootstrapApp = bootstrapApp;
