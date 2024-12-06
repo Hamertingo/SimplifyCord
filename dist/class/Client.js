@@ -22,23 +22,21 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const discord_js_1 = __importStar(require("discord.js"));
 const InteractionHandler_1 = require("./InteractionHandler");
-const SlashCommand_1 = require("./SlashCommand");
+const SlashCommand_1 = __importStar(require("./SlashCommand"));
+const Event_1 = require("./Event");
 const url_1 = require("url");
 const index_1 = require("../functions/index");
 const zod_1 = require("zod");
 const path = __importStar(require("path"));
+const chalk_1 = __importDefault(require("chalk"));
+const discord_js_2 = require("discord.js");
+const chalk_2 = __importDefault(require("chalk"));
 const allIntents = [
     discord_js_1.GatewayIntentBits.Guilds,
     discord_js_1.GatewayIntentBits.MessageContent,
@@ -51,123 +49,184 @@ const allIntents = [
     discord_js_1.GatewayIntentBits.DirectMessageReactions,
     discord_js_1.GatewayIntentBits.DirectMessageTyping
 ];
-class FastClient extends discord_js_1.Client {
-    constructor({ autoImport, intents } = {}) {
+class bootstrapApp extends discord_js_1.Client {
+    customOptions;
+    slashCommands = new discord_js_1.Collection();
+    slashArray = [];
+    commands;
+    constructor(options) {
         const intentsValidation = zod_1.z.array(zod_1.z.nativeEnum(discord_js_1.GatewayIntentBits), { invalid_type_error: "Intents list must be a GatewayIntentBits object from discord" });
-        intentsValidation.parse(intents || allIntents);
-        const customOptions = { autoImport, intents };
-        const options = {
-            intents: customOptions.intents || allIntents
+        intentsValidation.parse(options.intents || allIntents);
+        const tokenValidation = zod_1.z.string({ required_error: "Token is required", invalid_type_error: "Token must be a string" });
+        tokenValidation.parse(options.token);
+        const clientOptions = {
+            intents: options.intents || allIntents
         };
-        super(options);
-        this.slashCommands = new discord_js_1.Collection();
+        super(clientOptions);
+        this.customOptions = options;
+        this.commands = options.commands;
+        this.startListening();
+        this.loadAutoImportPaths().then(() => {
+            Event_1.Event.register(this);
+            this.login(options.token);
+        });
+    }
+    async invokeInteraction(interactionName, interaction) {
+        const runInteractionHandler = this.getInteractionCallback(interactionName, interaction);
+        if (runInteractionHandler)
+            return await runInteractionHandler();
+    }
+    async invokeCommand(commandName, interaction) {
+        const command = this.slashCommands.get(commandName);
+        if (!command) {
+            console.log(chalk_1.default.red.bold("❌ Error:"), chalk_1.default.red(`Command "${commandName}" not found!`));
+            return;
+        }
+        try {
+            await command.run(this, interaction);
+        }
+        catch (error) {
+            console.log(chalk_1.default.red.bold("❌ Error in command:"), chalk_1.default.red(`${commandName}`));
+            console.log(chalk_1.default.red("Details:"), error);
+            return;
+        }
+    }
+    async reloadCommands() {
+        if (this.commands?.guilds && this.commands.guilds.length > 0) {
+            this.commands.guilds.forEach(async (guildId) => {
+                const guild = this.guilds.cache.get(guildId);
+                if (guild) {
+                    await guild.commands.set([]);
+                    guild.commands.set(this.slashArray.map(cmd => cmd.toJSON())).catch(error => {
+                        console.log(chalk_1.default.red.bold("❌ Error:"), chalk_1.default.red(`Failed to register commands in guild ${guild.name}`));
+                        console.log(chalk_1.default.red("Details:"), error);
+                    });
+                    console.log(`⤿ Commands registered in guild: ${chalk_1.default.hex("#57F287").underline(guild.name)} (${guildId})`);
+                }
+                else {
+                    console.log(chalk_1.default.yellow("⚠"), chalk_1.default.yellow(`Guild with ID ${guildId} not found. Skipping command registration.`));
+                }
+            });
+        }
+        else {
+            this.guilds.cache.forEach(guild => {
+                guild.commands.set(this.slashArray.map(cmd => cmd)).catch(error => {
+                    console.log(chalk_1.default.red.bold("❌ Error:"), chalk_1.default.red(`Failed to register commands in guild ${guild.name}`));
+                    console.log(chalk_1.default.red("Details:"), error);
+                });
+            });
+            console.log(chalk_2.default.greenBright.bold("⤿ Commands registered globally in all guilds"));
+        }
+    }
+    async loadAutoImportPaths() {
+        const root_path = path.resolve();
+        this.slashCommands = new discord_js_1.default.Collection();
         this.slashArray = [];
-        this.customOptions = customOptions;
-    }
-    login(token) {
-        const _super = Object.create(null, {
-            login: { get: () => super.login }
-        });
-        return __awaiter(this, void 0, void 0, function* () {
-            const tokenValidation = zod_1.z.string({ required_error: "Token is required", invalid_type_error: "Token must be a string" });
-            tokenValidation.parse(token);
-            const result = _super.login.call(this, token);
-            this.startListening();
-            return result;
-        });
-    }
-    invokeInteraction(interactionName, interaction) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const runInteractionHandler = this.getInteractionCallback(interactionName, interaction);
-            if (runInteractionHandler)
-                return yield runInteractionHandler();
-        });
-    }
-    invokeCommand(commandName, interaction) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const command = this.slashCommands.get(commandName);
-            if (!command) {
-                return console.error('Error on interaction! Command not found.');
-            }
-            yield command.run(this, interaction);
-        });
-    }
-    reloadCommands() {
-        this.guilds.cache.forEach(guild => guild.commands.set(this.slashArray));
-    }
-    loadAutoImportPaths() {
-        return __awaiter(this, void 0, void 0, function* () {
-            var _a;
-            const root_path = path.resolve();
-            this.slashCommands = new discord_js_1.default.Collection();
-            const autoImportPath = (_a = this.customOptions) === null || _a === void 0 ? void 0 : _a.autoImport;
-            if (autoImportPath) {
-                for (const importPath of autoImportPath) {
-                    const files = index_1.utils.getRecursiveFiles(`${root_path}/${importPath}`);
-                    if (!files)
-                        throw new Error(`Auto Import path not found: '${importPath}'. You need to pass a valid path to the components folder`);
-                    for (const file of files) {
-                        const isValidFile = file.endsWith('.mjs') || file.endsWith('.js') || file.endsWith(".ts");
-                        if (!isValidFile)
-                            continue;
+        const autoImportPath = this.customOptions?.autoImport;
+        if (autoImportPath) {
+            for (const importPath of autoImportPath) {
+                const files = index_1.utils.getRecursiveFiles(`${root_path}/${importPath}`);
+                if (!files) {
+                    console.log(chalk_1.default.yellow("⚠"), chalk_1.default.yellow(`Auto Import path not found: '${importPath}'`));
+                    console.log(chalk_1.default.yellow("ℹ"), "Make sure to provide a valid path to the components folder");
+                    continue;
+                }
+                for (const file of files) {
+                    const isValidFile = file.endsWith('.mjs') || file.endsWith('.js') || file.endsWith(".ts");
+                    if (!isValidFile)
+                        continue;
+                    try {
                         const componentPath = (0, url_1.pathToFileURL)(file).href;
-                        yield import(componentPath).catch(err => {
-                            throw new Error(`Error on import component: ${err}`);
-                        });
+                        await import(componentPath);
+                    }
+                    catch (error) {
+                        console.log(chalk_1.default.red.bold("❌ Error:"), chalk_1.default.red(`Failed to import component: ${file}`));
+                        console.log(chalk_1.default.red("Details:"), error);
                     }
                 }
             }
-            for (const [key, value] of SlashCommand_1.slashCommandHandlers.entries()) {
-                this.slashCommands.set(key, value);
-                this.slashArray.push(value);
-            }
-        });
+        }
+        const uniqueCommands = new Map(SlashCommand_1.slashCommandHandlers);
+        this.slashCommands = new discord_js_1.default.Collection(uniqueCommands);
+        this.slashArray = Array.from(uniqueCommands.values());
     }
     startListening() {
-        this.once(discord_js_1.Events.ClientReady, (client) => __awaiter(this, void 0, void 0, function* () {
-            yield this.loadAutoImportPaths();
+        this.once(discord_js_1.Events.ClientReady, async (client) => {
+            console.log();
+            await this.loadAutoImportPaths();
+            if (this.customOptions?.loadLogs !== false) {
+                SlashCommand_1.default.loadLogs();
+                Event_1.Event.loadLogs();
+                console.log();
+            }
+            console.log("📦", `${chalk_1.default.hex("#5865F2").underline("discord.js")} ${chalk_1.default.yellow(discord_js_2.version)}`, "/", `${chalk_1.default.hex("#68a063").underline("NodeJs")} ${chalk_1.default.yellow(process.versions.node)}`);
+            console.log();
+            console.log(chalk_1.default.greenBright(`➝ Online as ${chalk_1.default.hex("#57F287").underline(client.user.username)}`));
             this.reloadCommands();
-        }));
-        this.on(discord_js_1.Events.InteractionCreate, (interaction) => __awaiter(this, void 0, void 0, function* () {
+            process.on("uncaughtException", err => console.log(err, client));
+            process.on("unhandledRejection", err => console.log(err, client));
+        });
+        this.on(discord_js_1.Events.InteractionCreate, async (interaction) => {
             if (interaction.isCommand()) {
                 const command = this.slashCommands.get(interaction.commandName);
                 if (!command) {
                     return interaction.reply({ content: 'Error on interaction! Command not found.', ephemeral: true });
                 }
-                yield command.run(this, interaction);
+                await command.run(this, interaction);
             }
             if (interaction.isButton() || interaction.isAnySelectMenu() || interaction.isModalSubmit()) {
                 const runInteractionHandler = this.getInteractionCallback(interaction.customId, interaction);
                 if (runInteractionHandler)
-                    return yield runInteractionHandler();
+                    return await runInteractionHandler();
             }
-        }));
-        this.on(discord_js_1.Events.GuildCreate, () => __awaiter(this, void 0, void 0, function* () {
+        });
+        this.on(discord_js_1.Events.GuildCreate, async () => {
             this.reloadCommands();
-        }));
+        });
+    }
+    parsePattern(pattern, customId) {
+        const patternParts = pattern.split('/');
+        const customIdParts = customId.split('/');
+        if (patternParts.length !== customIdParts.length) {
+            return null;
+        }
+        const params = {};
+        for (let i = 0; i < patternParts.length; i++) {
+            if (patternParts[i].startsWith(':')) {
+                const paramName = patternParts[i].slice(1);
+                params[paramName] = customIdParts[i];
+            }
+            else if (patternParts[i] !== customIdParts[i]) {
+                return null;
+            }
+        }
+        return params;
     }
     getInteractionCallback(customId, interaction) {
-        var _a;
         if (interaction.isButton() || interaction.isAnySelectMenu() || interaction.isCommand() || interaction.isModalSubmit()) {
-            const useOptionInLastParam = customId.includes("(OILP)");
-            customId = customId.replace("(OILP)", "");
-            const customId_whitout_params = customId === null || customId === void 0 ? void 0 : customId.split(":")[0];
-            const interactionHandler = InteractionHandler_1.interactionHandlers.get(customId_whitout_params);
-            if (!interactionHandler) {
-                return console.log(`\x1b[36mInteractionHandler not found for customId: ${customId}\x1b[0m`);
+            try {
+                const useOptionInLastParam = customId.includes("(OILP)");
+                const cleanCustomId = customId.replace("(OILP)", "");
+                for (const [pattern, handler] of InteractionHandler_1.interactionHandlers.entries()) {
+                    const params = this.parsePattern(pattern, cleanCustomId);
+                    if (params) {
+                        if (interaction.isAnySelectMenu() && useOptionInLastParam && interaction.values.length > 0) {
+                            params.value = interaction.values[0];
+                        }
+                        const callback = handler.run;
+                        if (!callback) {
+                            console.log(`\x1b[31mError: Callback not found for pattern: ${pattern}\x1b[0m`);
+                            return;
+                        }
+                        return callback.bind(null, this, interaction, params);
+                    }
+                }
+                console.log(`\x1b[33mWarning: No matching handler found for customId: ${customId}\x1b[0m`);
             }
-            let params = [];
-            const separate_params = customId.split(":");
-            params = separate_params.slice(1);
-            if (interaction.isAnySelectMenu() && useOptionInLastParam) {
-                params.push(interaction.values[0]);
+            catch (error) {
+                console.error(`\x1b[31mError processing interaction for customId ${customId}:`, error, '\x1b[0m');
             }
-            const callback = (_a = InteractionHandler_1.interactionHandlers.get(customId_whitout_params)) === null || _a === void 0 ? void 0 : _a.run;
-            if (!callback)
-                return console.log(`\x1b[36mCallback not found for customId: ${customId}\x1b[0m`);
-            // vamos retornar a função para ser chamada posteriormente
-            return callback.bind(null, this, interaction, ...params);
         }
     }
 }
-exports.default = FastClient;
+exports.default = bootstrapApp;

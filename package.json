@@ -10,12 +10,12 @@
     "test": "tsx watch test/index.ts"
   },
   "bugs": {
-    "url" : "https://github.com/Hamertingo/SimplifyCord/issues",
+    "url": "https://github.com/Hamertingo/SimplifyCord/issues",
     "email": "hamertidev@gmail.com"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Hamertingo/SimplifyCord"
+    "url": "git+https://github.com/Hamertingo/SimplifyCord.git"
   },
   "author": "Hamerti",
   "license": "ISC",
@@ -40,5 +40,7 @@
     "discord.js": "^14.15.3",
     "dotenv": "^16.4.5",
     "zod": "^3.23.8"
-  }
+  },
+  "types": "./dist/index.d.ts",
+  "homepage": "https://github.com/Hamertingo/SimplifyCord#readme"
 }
