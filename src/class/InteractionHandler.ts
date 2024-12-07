@@ -8,10 +8,10 @@ import {
     ChannelSelectMenuInteraction, 
     MentionableSelectMenuInteraction, 
     MessageComponentInteraction, 
-    CacheType, 
     ModalMessageModalSubmitInteraction,
-    Client 
+    ChatInputCommandInteraction
 } from "discord.js";
+import { bootstrapApp } from "./Client";
 
 export enum InteractionType {
     Button="Button",
@@ -27,28 +27,30 @@ export enum InteractionType {
     All="Component or modal"
 }
 
-export type InteractionTypeMap<Type extends InteractionType, Cache extends CacheType> = {
-    [InteractionType.Button]: ButtonInteraction<Cache>;
-    [InteractionType.Select]: AnySelectMenuInteraction<Cache>;
-    [InteractionType.StringSelect]: StringSelectMenuInteraction<Cache>;
-    [InteractionType.UserSelect]: UserSelectMenuInteraction<Cache>;
-    [InteractionType.RoleSelect]: RoleSelectMenuInteraction<Cache>;
-    [InteractionType.ChannelSelect]: ChannelSelectMenuInteraction<Cache>;
-    [InteractionType.MentionableSelect]: MentionableSelectMenuInteraction<Cache>;
-    [InteractionType.Row]: MessageComponentInteraction<Cache>;
-    [InteractionType.Modal]: ModalSubmitInteraction<Cache>;
-    [InteractionType.ModalComponent]: ModalMessageModalSubmitInteraction<Cache>;
-    [InteractionType.All]: MessageComponentInteraction<Cache> | ModalSubmitInteraction<Cache>;
-}[Type]
+export type InteractionTypeMap = {
+    [InteractionType.Button]: ButtonInteraction;
+    [InteractionType.Select]: AnySelectMenuInteraction;
+    [InteractionType.StringSelect]: StringSelectMenuInteraction;
+    [InteractionType.UserSelect]: UserSelectMenuInteraction;
+    [InteractionType.RoleSelect]: RoleSelectMenuInteraction;
+    [InteractionType.ChannelSelect]: ChannelSelectMenuInteraction;
+    [InteractionType.MentionableSelect]: MentionableSelectMenuInteraction;
+    [InteractionType.Row]: MessageComponentInteraction;
+    [InteractionType.Modal]: ModalSubmitInteraction;
+    [InteractionType.ModalComponent]: ModalMessageModalSubmitInteraction;
+    [InteractionType.All]: MessageComponentInteraction | ModalSubmitInteraction;
+}
+
+export type SupportedInteraction = ButtonInteraction | AnySelectMenuInteraction | ModalSubmitInteraction | ChatInputCommandInteraction;
 
 export interface IInteractionHandlerOptions<T extends InteractionType> {
     customId: string;
     type: T;
-    run: (client: Client, interaction: InteractionTypeMap<T, CacheType>, params: { [key: string]: string }) => void | Promise<void>;
+    run: (client: bootstrapApp, interaction: SupportedInteraction, params: { [key: string]: string }) => void | Promise<void>;
     cache?: "cached" | "api";
 }
 
-export class InteractionHandler<T extends InteractionType = InteractionType> {
+export class InteractionHandler<T extends InteractionType> {
     constructor(options: IInteractionHandlerOptions<T>) {
         interactionHandlers.set(options.customId, {
             run: options.run,

@@ -1,10 +1,8 @@
-import bootstrapApp from "../class/Client.js";
-
-new bootstrapApp({ 
-    autoImport: ["src/test/commands", "src/test/events"],
-    token: "",
-    loadLogs: true
-    //commands: {
-    //    guilds: [""],
-    //}
-}); 
+//import { bootstrapApp } from "../class";
+//import "dotenv/config";
+//
+//new bootstrapApp({ 
+//    autoImport: ["src/test/commands"],
+//    token: process.env.BOT_TOKEN || "",
+//    loadLogs: true,
+//});

@@ -27,7 +27,7 @@
 		// Path mapping Options
 		"baseUrl": "./src",
 		"paths": {
-		"*": ["src/*"],
+			"*": ["src/*"],
 		}
 	},
 	

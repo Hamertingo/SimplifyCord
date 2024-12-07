@@ -1,6 +1,6 @@
-import Discord, { Client, ClientOptions, GatewayIntentBits, Collection, Events, Interaction, CommandInteraction } from "discord.js";
+import { Client, ClientOptions, GatewayIntentBits, Collection, Events, ChatInputCommandInteraction, ButtonInteraction, AnySelectMenuInteraction, ModalSubmitInteraction, Interaction, CommandInteraction } from "discord.js";
 import { interactionHandlers } from "./InteractionHandler";
-import SlashCommand, { CommandErrorHandler, slashCommandHandlers } from "./SlashCommand";
+import SlashCommand, { slashCommandHandlers } from "./SlashCommand";
 import { Event } from "./Event";
 
 import { pathToFileURL } from 'url';
@@ -12,7 +12,6 @@ import { ISlashCommandHandler } from "./SlashCommand";
 
 import ck from 'chalk';
 import { version as djsVersion } from 'discord.js';
-import chalk from "chalk";
 
 const allIntents: GatewayIntentBits[] = [
     GatewayIntentBits.Guilds,
@@ -33,18 +32,25 @@ interface BootstrapAppOptions extends Partial<ClientOptions> {
     autoImport?: string[];
     commands?: {
         guilds?: string[];
-        onError?: CommandErrorHandler;  
     };
     loadLogs?: boolean;
 }
 
-export default class bootstrapApp extends Client {
+interface ISimplifyClient extends Client {
+    invokeInteraction(interactionName: string, interaction: CommandInteraction | ButtonInteraction | AnySelectMenuInteraction | ModalSubmitInteraction, params: { [key: string]: string }): Promise<any>;
+    invokeCommand(commandName: string, interaction: CommandInteraction): Promise<void>;
+    customOptions?: BootstrapAppOptions;
+    commands?: {
+        guilds?: string[];
+    };
+}
+
+export default class bootstrapApp extends Client implements ISimplifyClient {
     customOptions?: BootstrapAppOptions;
     slashCommands: Collection<string, ISlashCommandHandler> = new Collection();
     slashArray: any[] = [];
     commands?: {
         guilds?: string[];
-        onError?: CommandErrorHandler;
     };
 
     constructor(options: BootstrapAppOptions) {
@@ -62,6 +68,9 @@ export default class bootstrapApp extends Client {
         super(clientOptions);
         this.customOptions = options;
         this.commands = options.commands;
+        
+        this.slashCommands = new Collection();
+        this.slashArray = [];
 
         this.startListening();
         this.loadAutoImportPaths().then(() => {
@@ -70,13 +79,23 @@ export default class bootstrapApp extends Client {
         });
     }
 
-    public async invokeInteraction(interactionName: string, interaction: Interaction){
-        const runInteractionHandler = this.getInteractionCallback(interactionName, interaction) ;
-        if (runInteractionHandler) return await runInteractionHandler();
+    public async invokeInteraction( interactionName: string, interaction: CommandInteraction | ButtonInteraction | AnySelectMenuInteraction | ModalSubmitInteraction, params: { [key: string]: string } = {} ) {
+        const handler = interactionHandlers.get(interactionName);
+        if (!handler) {
+            console.log(ck.red.bold("❌ Error:"), ck.red(`Interaction "${interactionName}" not found!`));
+            return;
+        }
+
+        try {
+            await handler.run(this, interaction, params);
+        } catch (error) {
+            console.log(ck.red.bold("❌ Error in interaction:"), ck.red(`${interactionName}`));
+            console.log(ck.red("Details:"), error);
+        }
     }
 
-    public async invokeCommand(commandName: string, interaction: Interaction | CommandInteraction){
-        const command = this.slashCommands.get(commandName)
+    public async invokeCommand(commandName: string, interaction: ChatInputCommandInteraction) {
+        const command = this.slashCommands.get(commandName);
                 
         if (!command){
             console.log(ck.red.bold("❌ Error:"), ck.red(`Command "${commandName}" not found!`));
@@ -84,47 +103,61 @@ export default class bootstrapApp extends Client {
         }
 
         try {
-            await command.run(this, interaction as CommandInteraction);
+            await command.run(this, interaction);
         } catch (error) {
             console.log(ck.red.bold("❌ Error in command:"), ck.red(`${commandName}`));
             console.log(ck.red("Details:"), error);
-            return;
         }
     }
 
     public async reloadCommands() {
-        if (this.commands?.guilds && this.commands.guilds.length > 0) {
-            this.commands.guilds.forEach(async guildId => {
-                const guild = this.guilds.cache.get(guildId);
-                if (guild) {
-                    await guild.commands.set([]);
-                    guild.commands.set(this.slashArray.map(cmd => cmd.toJSON())).catch(error => {
-                        console.log(ck.red.bold("❌ Error:"), ck.red(`Failed to register commands in guild ${guild.name}`));
-                        console.log(ck.red("Details:"), error);
-                    });
-                    console.log(`⤿ Commands registered in guild: ${ck.hex("#57F287").underline(guild.name)} (${guildId})`);
-                } else {
-                    console.log(ck.yellow("⚠"), ck.yellow(`Guild with ID ${guildId} not found. Skipping command registration.`));
+        try {
+            this.slashCommands = new Collection();
+            this.slashArray = [];
+            
+            for (const [name, command] of slashCommandHandlers) {
+                if (this.slashCommands.has(name)) {
+                    console.log(ck.yellow(`⚠ Warning: Command "${name}" is already registered. Skipping duplicate.`));
+                    continue;
                 }
-            });
-        } else {
-            this.guilds.cache.forEach(guild => {
-                guild.commands.set(this.slashArray.map(cmd => cmd)).catch(error => {
-                    console.log(ck.red.bold("❌ Error:"), ck.red(`Failed to register commands in guild ${guild.name}`));
+                
+                this.slashCommands.set(name, command);
+                this.slashArray.push(command);
+            }
+
+            if (this.slashArray.length === 0) {
+                console.log(ck.yellow("⚠ Warning: No commands to register."));
+                return;
+            }
+
+            if (this.guilds.cache.size === 0) {
+                console.log(ck.yellow("⚠ Warning: No guilds found. Commands will be registered when joining a guild."));
+                return;
+            }
+
+            for (const guild of this.guilds.cache.values()) {
+                if (this.commands?.guilds && !this.commands.guilds.includes(guild.id)) {
+                    continue;
+                }
+
+                try {
+                    await guild.commands.set(this.slashArray);
+                    console.log(ck.green(`✓ Commands reloaded for guild: ${ck.blue.underline(guild.name)} (${this.slashArray.length} commands)`));
+                } catch (error) {
+                    console.log(ck.red.bold("❌ Error reloading commands for guild:"), ck.red(`${guild.name}`));
                     console.log(ck.red("Details:"), error);
-                });
-            });
-            console.log(chalk.greenBright.bold("⤿ Commands registered globally in all guilds"));
+                }
+            }
+        } catch (error) {
+            console.log(ck.red.bold("❌ Error reloading commands:"));
+            console.log(ck.red("Details:"), error);
         }
     }
     
     private async loadAutoImportPaths() {
         const root_path = path.resolve();
-    
-        this.slashCommands = new Discord.Collection();
-        this.slashArray = [];
         const autoImportPath = this.customOptions?.autoImport;
-    
+
         if (autoImportPath) {
             for (const importPath of autoImportPath) {
                 const files = utils.getRecursiveFiles(`${root_path}/${importPath}`);
@@ -133,11 +166,11 @@ export default class bootstrapApp extends Client {
                     console.log(ck.yellow("ℹ"), "Make sure to provide a valid path to the components folder");
                     continue;
                 }
-    
+
                 for (const file of files) {
                     const isValidFile = file.endsWith('.mjs') || file.endsWith('.js') || file.endsWith(".ts");
                     if (!isValidFile) continue;
-    
+
                     try {
                         const componentPath = pathToFileURL(file).href;
                         await import(componentPath);
@@ -148,10 +181,19 @@ export default class bootstrapApp extends Client {
                 }
             }
         }
-    
-        const uniqueCommands = new Map(slashCommandHandlers);
-        this.slashCommands = new Discord.Collection(uniqueCommands);
-        this.slashArray = Array.from(uniqueCommands.values());
+
+        this.slashCommands = new Collection();
+        this.slashArray = [];
+
+        for (const [name, command] of slashCommandHandlers) {
+            this.slashCommands.set(name, command);
+            this.slashArray.push({
+                name: command.name,
+                description: command.description,
+                type: command.type,
+                options: command.options || []
+            });
+        }
     }
     
     private startListening() {
@@ -168,32 +210,44 @@ export default class bootstrapApp extends Client {
             console.log("📦", `${ck.hex("#5865F2").underline("discord.js")} ${ck.yellow(djsVersion)}`, "/", `${ck.hex("#68a063").underline("NodeJs")} ${ck.yellow(process.versions.node)}`);
             console.log()
             console.log(ck.greenBright(`➝ Online as ${ck.hex("#57F287").underline(client.user.username)}`));
-            this.reloadCommands();
-
-            process.on("uncaughtException", err => console.log(err, client));
-            process.on("unhandledRejection", err => console.log(err, client));
+            await this.reloadCommands();
         });
 
         this.on(Events.InteractionCreate, async (interaction: Interaction) => {
             if (interaction.isCommand()) {
-                const command = this.slashCommands.get(interaction.commandName)
+                const command = this.slashCommands.get(interaction.commandName);
                 
-                if (!command){
-                    return interaction.reply({content: 'Error on interaction! Command not found.', ephemeral: true});
+                if (!command) {
+                    console.log(ck.red.bold("❌ Error:"), ck.red(`Command "${interaction.commandName}" not found!`));
+                    console.log(ck.yellow("ℹ Available commands:"), Array.from(this.slashCommands.keys()).join(", "));
+                    await interaction.reply({ content: 'Command not found. Please try again later.', ephemeral: true }).catch(() => {});
+                    return;
                 }
 
-                await command.run(this, interaction);
+                try {
+                    await command.run(this, interaction);
+                } catch (error) {
+                    console.log(ck.red.bold("❌ Error in command:"), ck.red(`${interaction.commandName}`));
+                    console.log(ck.red("Details:"), error);
+                    await interaction.reply({ content: 'An error occurred while executing this command.', ephemeral: true }).catch(() => {});
+                }
             }
 
-            if (interaction.isButton() || interaction.isAnySelectMenu() || interaction.isModalSubmit()){
-                const runInteractionHandler = this.getInteractionCallback(interaction.customId, interaction) ;
-                if (runInteractionHandler) return await runInteractionHandler();
+            if (interaction.isButton() || interaction.isAnySelectMenu() || interaction.isModalSubmit()) {
+                try {
+                    const runInteractionHandler = this.getInteractionCallback(interaction.customId, interaction);
+                    if (runInteractionHandler) await runInteractionHandler();
+                } catch (error) {
+                    console.log(ck.red.bold("❌ Error in interaction:"), ck.red(`${interaction.customId}`));
+                    console.log(ck.red("Details:"), error);
+                    await interaction.reply({ content: 'An error occurred while processing this interaction.', ephemeral: true }).catch(() => {});
+                }
             }
         });
 
         this.on(Events.GuildCreate, async () => {
-            this.reloadCommands();
-        })
+            await this.reloadCommands();
+        });
     }
 
     private parsePattern(pattern: string, customId: string) {
@@ -218,7 +272,7 @@ export default class bootstrapApp extends Client {
         return params;
     }
 
-    private getInteractionCallback(customId: string, interaction: Interaction | CommandInteraction) {
+    private getInteractionCallback(customId: string, interaction: Interaction | ChatInputCommandInteraction) {
         if (interaction.isButton() || interaction.isAnySelectMenu() || interaction.isCommand() || interaction.isModalSubmit()) {
             try {
                 const useOptionInLastParam = customId.includes("(OILP)");

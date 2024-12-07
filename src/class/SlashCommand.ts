@@ -1,7 +1,7 @@
-import { ApplicationCommandOption, ApplicationCommandType, CommandInteraction, InteractionResponse, Client } from "discord.js";
+import { ApplicationCommandOption, ApplicationCommandType, CommandInteraction } from "discord.js";
+import { bootstrapApp } from "./Client";
 import chalk from 'chalk';
 
-export type CommandErrorHandler = (error: unknown, interaction: CommandInteraction) => void;
 export const slashCommandHandlers = new Map();
 
 export interface ISlashCommandHandler {
@@ -9,7 +9,7 @@ export interface ISlashCommandHandler {
     description: string;
     type: ApplicationCommandType;
     options?: ApplicationCommandOption[];
-    run: (client: Client, interaction: CommandInteraction) => Promise<void | InteractionResponse>;
+    run: (client: bootstrapApp, interaction: CommandInteraction) => any;
 }
 
 export default class SlashCommand {
