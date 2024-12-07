@@ -1,6 +1,6 @@
 import { ActionRowBuilder, AnyComponentBuilder } from 'discord.js';
 
-function CreateRow<T extends AnyComponentBuilder>(components: T[] | T[][]): ActionRowBuilder<T> {
+function createRow<T extends AnyComponentBuilder>(components: T[] | T[][]): ActionRowBuilder<T> {
     if (!components || components.length === 0) {
         throw new Error('CreateRow: Components array cannot be empty');
     }
@@ -17,4 +17,4 @@ function CreateRow<T extends AnyComponentBuilder>(components: T[] | T[][]): Acti
     return new ActionRowBuilder<T>().addComponents(flatComponents as T[]);
 }
 
-export default CreateRow;
+export default createRow;

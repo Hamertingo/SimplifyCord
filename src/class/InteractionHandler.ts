@@ -1,16 +1,4 @@
-import { 
-    ButtonInteraction, 
-    ModalSubmitInteraction, 
-    StringSelectMenuInteraction, 
-    AnySelectMenuInteraction, 
-    UserSelectMenuInteraction, 
-    RoleSelectMenuInteraction, 
-    ChannelSelectMenuInteraction, 
-    MentionableSelectMenuInteraction, 
-    MessageComponentInteraction, 
-    ModalMessageModalSubmitInteraction,
-    ChatInputCommandInteraction
-} from "discord.js";
+import { ButtonInteraction, ModalSubmitInteraction, StringSelectMenuInteraction, AnySelectMenuInteraction, UserSelectMenuInteraction, RoleSelectMenuInteraction, ChannelSelectMenuInteraction, MentionableSelectMenuInteraction, MessageComponentInteraction, ModalMessageModalSubmitInteraction } from "discord.js";
 import { bootstrapApp } from "./Client";
 
 export enum InteractionType {
@@ -41,12 +29,10 @@ export type InteractionTypeMap = {
     [InteractionType.All]: MessageComponentInteraction | ModalSubmitInteraction;
 }
 
-export type SupportedInteraction = ButtonInteraction | AnySelectMenuInteraction | ModalSubmitInteraction | ChatInputCommandInteraction;
-
 export interface IInteractionHandlerOptions<T extends InteractionType> {
     customId: string;
     type: T;
-    run: (client: bootstrapApp, interaction: SupportedInteraction, params: { [key: string]: string }) => void | Promise<void>;
+    run: (client: bootstrapApp, interaction: InteractionTypeMap[T], params: { [key: string]: string }) => void | Promise<void>;
     cache?: "cached" | "api";
 }
 

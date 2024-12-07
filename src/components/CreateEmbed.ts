@@ -19,7 +19,7 @@ type RequireAtLeastOne<T, Keys extends keyof T = keyof T> =
 
 type embedData = RequireAtLeastOne<BaseEmbedData>;
 
-const CreateEmbed = (embedData: embedData) => {
+const createEmbed = (embedData: embedData) => {
     const title = embedData.title;
     const description = embedData.description;
     const color = embedData.color;
@@ -74,4 +74,4 @@ const CreateEmbed = (embedData: embedData) => {
     }
 }
 
-export default CreateEmbed;
+export default createEmbed;

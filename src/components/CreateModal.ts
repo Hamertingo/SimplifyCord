@@ -21,7 +21,7 @@ class CustomModalBuilder extends ModalBuilder {
     }
 }
 
-const CreateModal = (modalData: ModalData) => {
+const createModal = (modalData: ModalData) => {
     try {
         const { title, inputs, customId } = modalData;
 
@@ -81,4 +81,4 @@ const CreateModal = (modalData: ModalData) => {
     }
 }
 
-export default CreateModal;
+export default createModal;

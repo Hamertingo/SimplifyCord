@@ -1,6 +1,6 @@
 import { Client, ClientOptions, GatewayIntentBits, Collection, Events, ChatInputCommandInteraction, ButtonInteraction, AnySelectMenuInteraction, ModalSubmitInteraction, Interaction, CommandInteraction } from "discord.js";
-import { interactionHandlers } from "./InteractionHandler";
 import SlashCommand, { slashCommandHandlers } from "./SlashCommand";
+import { interactionHandlers } from "./InteractionHandler";
 import { Event } from "./Event";
 
 import { pathToFileURL } from 'url';
@@ -10,8 +10,9 @@ import { z } from "zod";
 import * as path from 'path';
 import { ISlashCommandHandler } from "./SlashCommand";
 
-import ck from 'chalk';
+import { Logger } from '../functions/logger';
 import { version as djsVersion } from 'discord.js';
+import chalk from "chalk";
 
 const allIntents: GatewayIntentBits[] = [
     GatewayIntentBits.Guilds,
@@ -79,18 +80,23 @@ export default class bootstrapApp extends Client implements ISimplifyClient {
         });
     }
 
-    public async invokeInteraction( interactionName: string, interaction: CommandInteraction | ButtonInteraction | AnySelectMenuInteraction | ModalSubmitInteraction, params: { [key: string]: string } = {} ) {
-        const handler = interactionHandlers.get(interactionName);
-        if (!handler) {
-            console.log(ck.red.bold("❌ Error:"), ck.red(`Interaction "${interactionName}" not found!`));
-            return;
-        }
-
+    public async invokeInteraction(interactionName: string, interaction: CommandInteraction | ButtonInteraction | AnySelectMenuInteraction | ModalSubmitInteraction, params: { [key: string]: string } = {}): Promise<any> {
         try {
-            await handler.run(this, interaction, params);
+            const handler = interactionHandlers.get(interactionName);
+            if (!handler) {
+                Logger.error(`No handler found for interaction: ${interactionName}`);
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({ content: 'Interaction handler not found.', ephemeral: true });
+                }
+                return;
+            }
+
+            return await handler.run(this, interaction, params);
         } catch (error) {
-            console.log(ck.red.bold("❌ Error in interaction:"), ck.red(`${interactionName}`));
-            console.log(ck.red("Details:"), error);
+            Logger.error(`Error invoking interaction "${interactionName}"`, error);
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ content: 'An error occurred while processing this interaction.', ephemeral: true });
+            }
         }
     }
 
@@ -98,15 +104,14 @@ export default class bootstrapApp extends Client implements ISimplifyClient {
         const command = this.slashCommands.get(commandName);
                 
         if (!command){
-            console.log(ck.red.bold("❌ Error:"), ck.red(`Command "${commandName}" not found!`));
+            Logger.error(`Command "${commandName}" not found!`);
             return;
         }
 
         try {
             await command.run(this, interaction);
         } catch (error) {
-            console.log(ck.red.bold("❌ Error in command:"), ck.red(`${commandName}`));
-            console.log(ck.red("Details:"), error);
+            Logger.error(`Error in command "${commandName}"`, error);
         }
     }
 
@@ -117,7 +122,7 @@ export default class bootstrapApp extends Client implements ISimplifyClient {
             
             for (const [name, command] of slashCommandHandlers) {
                 if (this.slashCommands.has(name)) {
-                    console.log(ck.yellow(`⚠ Warning: Command "${name}" is already registered. Skipping duplicate.`));
+                    Logger.warn(`Warning: Command "${name}" is already registered. Skipping duplicate.`);
                     continue;
                 }
                 
@@ -126,12 +131,12 @@ export default class bootstrapApp extends Client implements ISimplifyClient {
             }
 
             if (this.slashArray.length === 0) {
-                console.log(ck.yellow("⚠ Warning: No commands to register."));
+                Logger.warn("Warning: No commands to register.");
                 return;
             }
 
             if (this.guilds.cache.size === 0) {
-                console.log(ck.yellow("⚠ Warning: No guilds found. Commands will be registered when joining a guild."));
+                Logger.warn("Warning: No guilds found. Commands will be registered when joining a guild.");
                 return;
             }
 
@@ -142,15 +147,13 @@ export default class bootstrapApp extends Client implements ISimplifyClient {
 
                 try {
                     await guild.commands.set(this.slashArray);
-                    console.log(ck.green(`✓ Commands reloaded for guild: ${ck.blue.underline(guild.name)} (${this.slashArray.length} commands)`));
+                    Logger.info(`Commands reloaded for guild: ${Logger.highlight(guild.name)} (${this.slashArray.length} commands)`);
                 } catch (error) {
-                    console.log(ck.red.bold("❌ Error reloading commands for guild:"), ck.red(`${guild.name}`));
-                    console.log(ck.red("Details:"), error);
+                    Logger.error(`Error reloading commands for guild ${guild.name}`, error);
                 }
             }
         } catch (error) {
-            console.log(ck.red.bold("❌ Error reloading commands:"));
-            console.log(ck.red("Details:"), error);
+            Logger.error("Error reloading commands", error);
         }
     }
     
@@ -162,8 +165,8 @@ export default class bootstrapApp extends Client implements ISimplifyClient {
             for (const importPath of autoImportPath) {
                 const files = utils.getRecursiveFiles(`${root_path}/${importPath}`);
                 if (!files) {
-                    console.log(ck.yellow("⚠"), ck.yellow(`Auto Import path not found: '${importPath}'`));
-                    console.log(ck.yellow("ℹ"), "Make sure to provide a valid path to the components folder");
+                    Logger.warn(`Auto Import path not found: '${importPath}'`);
+                    Logger.info("Make sure to provide a valid path to the components folder");
                     continue;
                 }
 
@@ -175,8 +178,7 @@ export default class bootstrapApp extends Client implements ISimplifyClient {
                         const componentPath = pathToFileURL(file).href;
                         await import(componentPath);
                     } catch (error) {
-                        console.log(ck.red.bold("❌ Error:"), ck.red(`Failed to import component: ${file}`));
-                        console.log(ck.red("Details:"), error);
+                        Logger.error(`Failed to import component: ${file}`, error);
                     }
                 }
             }
@@ -204,12 +206,12 @@ export default class bootstrapApp extends Client implements ISimplifyClient {
             if (this.customOptions?.loadLogs !== false) {
                 SlashCommand.loadLogs();
                 Event.loadLogs();
-                console.log()
+                Logger.separator();
             }
             
-            console.log("📦", `${ck.hex("#5865F2").underline("discord.js")} ${ck.yellow(djsVersion)}`, "/", `${ck.hex("#68a063").underline("NodeJs")} ${ck.yellow(process.versions.node)}`);
-            console.log()
-            console.log(ck.greenBright(`➝ Online as ${ck.hex("#57F287").underline(client.user.username)}`));
+            Logger.info(`${chalk.green.bold(`discord.js`)} @${chalk.white.bold(djsVersion)} / ${chalk.green.bold(`NodeJs`)} @${chalk.white.bold(process.versions.node)}`);
+            Logger.separator();
+            Logger.ready(`Online as ${Logger.highlight(client.user.username)}`);
             await this.reloadCommands();
         });
 
@@ -218,29 +220,41 @@ export default class bootstrapApp extends Client implements ISimplifyClient {
                 const command = this.slashCommands.get(interaction.commandName);
                 
                 if (!command) {
-                    console.log(ck.red.bold("❌ Error:"), ck.red(`Command "${interaction.commandName}" not found!`));
-                    console.log(ck.yellow("ℹ Available commands:"), Array.from(this.slashCommands.keys()).join(", "));
-                    await interaction.reply({ content: 'Command not found. Please try again later.', ephemeral: true }).catch(() => {});
+                    Logger.error(`Command "${interaction.commandName}" not found!`);
+                    Logger.info(`Available commands: ${Array.from(this.slashCommands.keys()).join(", ")}`);
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({ content: 'Command not found. Please try again later.', ephemeral: true });
+                    }
                     return;
                 }
 
                 try {
                     await command.run(this, interaction);
                 } catch (error) {
-                    console.log(ck.red.bold("❌ Error in command:"), ck.red(`${interaction.commandName}`));
-                    console.log(ck.red("Details:"), error);
-                    await interaction.reply({ content: 'An error occurred while executing this command.', ephemeral: true }).catch(() => {});
+                    Logger.error(`Error in command "${interaction.commandName}"`, error);
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({ content: 'An error occurred while executing this command.', ephemeral: true });
+                    }
                 }
             }
 
             if (interaction.isButton() || interaction.isAnySelectMenu() || interaction.isModalSubmit()) {
                 try {
                     const runInteractionHandler = this.getInteractionCallback(interaction.customId, interaction);
-                    if (runInteractionHandler) await runInteractionHandler();
+                    if (!runInteractionHandler) {
+                        Logger.error(`No handler found for interaction: ${interaction.customId}`);
+                        if (!interaction.replied && !interaction.deferred) {
+                            await interaction.reply({ content: 'Interaction handler not found.', ephemeral: true });
+                        }
+                        return;
+                    }
+
+                    await runInteractionHandler();
                 } catch (error) {
-                    console.log(ck.red.bold("❌ Error in interaction:"), ck.red(`${interaction.customId}`));
-                    console.log(ck.red("Details:"), error);
-                    await interaction.reply({ content: 'An error occurred while processing this interaction.', ephemeral: true }).catch(() => {});
+                    Logger.error(`Error in interaction "${interaction.customId}"`, error);
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({ content: 'An error occurred while processing this interaction.', ephemeral: true });
+                    }
                 }
             }
         });
@@ -287,7 +301,7 @@ export default class bootstrapApp extends Client implements ISimplifyClient {
 
                         const callback = handler.run;
                         if (!callback) {
-                            console.log(`\x1b[31mError: Callback not found for pattern: ${pattern}\x1b[0m`);
+                            Logger.error(`Callback not found for pattern: ${pattern}`);
                             return;
                         }
 
@@ -295,9 +309,9 @@ export default class bootstrapApp extends Client implements ISimplifyClient {
                     }
                 }
 
-                console.log(`\x1b[33mWarning: No matching handler found for customId: ${customId}\x1b[0m`);
+                Logger.warn(`No matching handler found for customId: ${customId}`);
             } catch (error) {
-                console.error(`\x1b[31mError processing interaction for customId ${customId}:`, error, '\x1b[0m');
+                Logger.error(`Error processing interaction for customId ${customId}`, error);
             }
         }
     }
