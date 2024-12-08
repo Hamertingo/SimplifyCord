@@ -1,6 +1,6 @@
 import { Client, ClientOptions, GatewayIntentBits, Collection, Events, ChatInputCommandInteraction, ButtonInteraction, AnySelectMenuInteraction, ModalSubmitInteraction, Interaction, CommandInteraction } from "discord.js";
-import SlashCommand, { slashCommandHandlers } from "./SlashCommand";
-import { interactionHandlers } from "./InteractionHandler";
+import SlashCommand, { slashCommandHandlers } from "../handlers/commands/index";
+import { interactionHandlers } from "../handlers/interactions/index";
 import { Event } from "./Event";
 
 import { pathToFileURL } from 'url';
@@ -8,43 +8,14 @@ import { utils } from "../functions/index"
 import { z } from "zod";
 
 import * as path from 'path';
-import { ISlashCommandHandler } from "./SlashCommand";
+import { ISlashCommandHandler } from "../handlers/commands/index";
 
 import { Logger } from '../functions/logger';
 import { version as djsVersion } from 'discord.js';
 import chalk from "chalk";
 
-const allIntents: GatewayIntentBits[] = [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildPresences,
-    GatewayIntentBits.GuildMessageReactions,
-    GatewayIntentBits.GuildMessageTyping,
-    GatewayIntentBits.DirectMessages,
-    GatewayIntentBits.DirectMessageReactions,
-    GatewayIntentBits.DirectMessageTyping
-];
-
-interface BootstrapAppOptions extends Partial<ClientOptions> {
-    token: string;
-    intents?: GatewayIntentBits[];
-    autoImport?: string[];
-    commands?: {
-        guilds?: string[];
-    };
-    loadLogs?: boolean;
-}
-
-interface ISimplifyClient extends Client {
-    invokeInteraction(interactionName: string, interaction: CommandInteraction | ButtonInteraction | AnySelectMenuInteraction | ModalSubmitInteraction, params: { [key: string]: string }): Promise<any>;
-    invokeCommand(commandName: string, interaction: CommandInteraction): Promise<void>;
-    customOptions?: BootstrapAppOptions;
-    commands?: {
-        guilds?: string[];
-    };
-}
+import { DEFAULT_INTENTS } from "../lib/constants/intents";
+import { BootstrapAppOptions, ISimplifyClient } from "../types/index";
 
 export default class bootstrapApp extends Client implements ISimplifyClient {
     customOptions?: BootstrapAppOptions;
@@ -57,13 +28,13 @@ export default class bootstrapApp extends Client implements ISimplifyClient {
     constructor(options: BootstrapAppOptions) {
         
         const intentsValidation = z.array(z.nativeEnum(GatewayIntentBits), { invalid_type_error: "Intents list must be a GatewayIntentBits object from discord" });
-        intentsValidation.parse(options.intents || allIntents);
+        intentsValidation.parse(options.intents || DEFAULT_INTENTS);
 
         const tokenValidation = z.string({ required_error: "Token is required", invalid_type_error: "Token must be a string" });
         tokenValidation.parse(options.token);
 
         const clientOptions: ClientOptions = {
-            intents: options.intents || allIntents
+            intents: options.intents || DEFAULT_INTENTS
         };
 
         super(clientOptions);
@@ -122,12 +93,16 @@ export default class bootstrapApp extends Client implements ISimplifyClient {
             
             for (const [name, command] of slashCommandHandlers) {
                 if (this.slashCommands.has(name)) {
-                    Logger.warn(`Warning: Command "${name}" is already registered. Skipping duplicate.`);
                     continue;
                 }
                 
                 this.slashCommands.set(name, command);
-                this.slashArray.push(command);
+                this.slashArray.push({
+                    name: command.name,
+                    description: command.description,
+                    type: command.type,
+                    options: command.options || []
+                });
             }
 
             if (this.slashArray.length === 0) {
@@ -140,16 +115,29 @@ export default class bootstrapApp extends Client implements ISimplifyClient {
                 return;
             }
 
-            for (const guild of this.guilds.cache.values()) {
-                if (this.commands?.guilds && !this.commands.guilds.includes(guild.id)) {
-                    continue;
-                }
+            // If specific guilds are configured, only register in those guilds
+            if (this.commands?.guilds && this.commands.guilds.length > 0) {
+                for (const guildId of this.commands.guilds) {
+                    const guild = this.guilds.cache.get(guildId);
+                    if (!guild) {
+                        Logger.warn(`Guild with ID ${guildId} not found. Make sure the bot is in the guild.`);
+                        continue;
+                    }
 
+                    try {
+                        await guild.commands.set(this.slashArray);
+                        Logger.success(`Commands registered in guild: ${guild.name} (${this.slashArray.length} commands)`);
+                    } catch (error) {
+                        Logger.error(`Failed to register commands in guild ${guild.name}`, error);
+                    }
+                }
+            } else {
+                // If no specific guilds are configured, register globally
                 try {
-                    await guild.commands.set(this.slashArray);
-                    Logger.info(`Commands reloaded for guild: ${Logger.highlight(guild.name)} (${this.slashArray.length} commands)`);
+                    await this.application?.commands.set(this.slashArray);
+                    Logger.success(`Commands registered globally (${this.slashArray.length} commands)`);
                 } catch (error) {
-                    Logger.error(`Error reloading commands for guild ${guild.name}`, error);
+                    Logger.error("Failed to register commands globally", error);
                 }
             }
         } catch (error) {

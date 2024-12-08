@@ -1,5 +1,5 @@
 import { ApplicationCommandOption, ApplicationCommandType, CommandInteraction } from "discord.js";
-import { bootstrapApp } from "./Client";
+import { bootstrapApp } from "../../class/Client";
 import chalk from 'chalk';
 
 export const slashCommandHandlers = new Map();
